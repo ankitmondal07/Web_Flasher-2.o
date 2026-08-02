@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Web Flasher Portal - Flash Firmware directly from Browser</title>
+  <meta name="description" content="Professional web-based ESP32 firmware installer powered by ESP Web Tools and Web Serial API. Flash pre-compiled binaries, parse raw esptool commands, or auto-detect local binaries to generate release ZIP packages.">
+  
+  <!-- FontAwesome Icons & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- JSZip for in-browser ZIP generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <!-- ESP Web Tools Web Component (ES Module) -->
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head>
+<body>
+  <div id="debug-error-console" style="display: none; background: #fee2e2; color: #991b1b; padding: 1rem; border-bottom: 2px solid #ef4444; font-family: monospace; font-size: 0.9rem; z-index: 9999; position: relative;">
+    <strong>JavaScript Error Detected:</strong> <span id="debug-error-msg"></span>
+  </div>
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      const consoleEl = document.getElementById('debug-error-console');
+      const msgEl = document.getElementById('debug-error-msg');
+      if (consoleEl && msgEl) {
+        consoleEl.style.display = 'block';
+        msgEl.innerText = message + ' at ' + source + ':' + lineno + ':' + colno;
+      }
+      return false;
+    };
+  </script>
+
+  <div class="app-container">
+
+    <!-- Header / Navbar -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fas fa-microchip"></i>
+        </div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <h1 class="brand-title">ESP Web Flasher</h1>
+            <span class="brand-badge">v1.3.0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Browser Compatibility Indicator -->
+      <div id="browser-status" class="browser-status supported">
+        <span class="status-dot"></span>
+        <span>Checking browser capability...</span>
+      </div>
+    </header>
+
+    <!-- Hero Banner -->
+    <section class="hero">
+      <div class="hero-tag">
+        <i class="fas fa-bolt"></i> Flash Portal & Auto-Detect Binary Packager
+      </div>
+      <h2 class="hero-title">Flash ESP32 Firmware <span>Directly from Browser</span></h2>
+      <p class="hero-subtitle">
+        Flash pre-packaged firmware, run instant custom command flashing, or auto-detect compiled <code>.bin</code> files directly from your computer disk to generate a complete GitHub Pages Web Flasher ZIP.
+      </p>
+
+      <!-- Mode Selector Tabs -->
+      <div class="mode-tabs">
+        <button id="tab-default" class="tab-btn active">
+          <i class="fas fa-box-open"></i> End-User Flasher
+        </button>
+        <button id="tab-custom" class="tab-btn">
+          <i class="fas fa-terminal"></i> Quick Command Flasher
+        </button>
+        <button id="tab-creator" class="tab-btn">
+          <i class="fas fa-file-archive"></i> Developer ZIP Packager
+        </button>
+      </div>
+    </section>
+
+    <!-- Main Grid -->
+    <main class="grid-main">
+
+      <!-- MODE 1: DEFAULT PROJECT FIRMWARE CARD -->
+      <div id="section-default-flasher" class="glass-card mode-section active">
+        <div class="card-header">
+          <h3 class="card-title">
+            <i class="fas fa-download"></i> End-User Firmware Flasher
+          </h3>
+          <span id="end-user-chip-badge" class="chip-pill">Select ZIP</span>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 1.5rem; margin-top: 1.5rem;">
+          <label class="input-label">
+            <i class="fas fa-file-archive"></i> Upload Firmware ZIP Package:
+          </label>
+          <div id="end-user-dropzone" class="dropzone">
+            <i class="fas fa-file-archive dropzone-icon" style="color: var(--accent-cyan);"></i>
+            <p>Drag & Drop your <code>.zip</code> package here or <span class="browse-link">Browse File</span></p>
+            <input type="file" id="zip-input" accept=".zip" class="file-input">
+          </div>
+        </div>
+
+        <div class="firmware-meta" id="end-user-meta" style="display: none;">
+          <div class="meta-row">
+            <span class="meta-label">Firmware Name:</span>
+            <span class="meta-value" id="meta-zip-name">-</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Target Architecture:</span>
+            <span class="meta-value" id="meta-zip-chip">-</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Version:</span>
+            <span class="meta-value" id="meta-zip-version">-</span>
+          </div>
+          <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem;">
+            <strong style="font-size: 0.9rem; color: var(--text-main);"><i class="fas fa-list" style="color: var(--accent-cyan);"></i> Partitions Detected in ZIP:</strong>
+            <div class="table-wrapper" style="margin-top: 0.5rem;">
+              <table class="parsed-table">
+                <thead>
+                  <tr>
+                    <th>Flash Offset</th>
+                    <th>Command Filename</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="meta-zip-partitions-table-body">
+                  <!-- Dynamic rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="flasher-box" id="end-user-flasher-box" style="display: none; margin-top: 1.25rem;">
+          <!-- ESP Web Tools Install Button Component -->
+          <esp-web-install-button id="esp-button-default" manifest="">
+            <button slot="activate" class="btn-activate">
+              <i class="fas fa-bolt"></i> Connect & Flash Device
+            </button>
+            <span slot="unsupported">Your browser does not support Web Serial. Please use Chrome or Edge.</span>
+            <span slot="not-allowed">WebSerial requires HTTPS or localhost.</span>
+          </esp-web-install-button>
+        </div>
+        <div id="end-user-flasher-msg" style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 1rem;">
+          Please upload a compiled firmware ZIP package to start flashing.
+        </div>
+        <div id="browser-alert-default" class="browser-alert"></div>
+      </div>
+
+      <!-- MODE 2: QUICK CUSTOM COMMAND FLASHER CARD -->
+      <div id="section-custom-flasher" class="glass-card mode-section">
+        <div class="card-header">
+          <h3 class="card-title">
+            <i class="fas fa-magic"></i> Quick Command & Binary Flasher
+          </h3>
+          <span id="detected-chip-badge" class="chip-pill">Chip: Auto-detect</span>
+        </div>
+
+        <!-- Step A: Paste Esptool Flash Command -->
+        <div class="input-group">
+          <label for="esptool-cmd" class="input-label">
+            <i class="fas fa-code"></i> Paste Arduino IDE / ESPTool Flash Command:
+          </label>
+          <textarea id="esptool-cmd" class="cmd-textarea" rows="4" placeholder="Paste your compiler command here, e.g.:&#10;esptool.exe --chip esp32 --port COM14 write_flash 0x1000 bootloader.bin 0x8000 partitions.bin 0xe000 boot_app0.bin 0x10000 firmware.bin"></textarea>
+          <div class="cmd-actions">
+            <button id="btn-parse-cmd" class="btn-sm btn-primary-sm">
+              <i class="fas fa-search"></i> Auto-Detect Offsets & Files
+            </button>
+            <button id="btn-example-cmd" class="btn-sm">
+              <i class="fas fa-lightbulb"></i> Load Example Command
+            </button>
+            <button id="btn-clear-cmd" class="btn-sm">
+              <i class="fas fa-eraser"></i> Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Step B: Upload .BIN Files -->
+        <div class="input-group" style="margin-top: 1.5rem;">
+          <label class="input-label">
+            <i class="fas fa-file-upload"></i> Upload Compiled (.bin) Files:
+          </label>
+
+          <div id="dropzone" class="dropzone">
+            <i class="fas fa-cloud-upload-alt dropzone-icon"></i>
+            <p>Drag & Drop your <code>.bin</code> files here or <span class="browse-link">Browse Files</span></p>
+            <input type="file" id="file-input" multiple accept=".bin" class="file-input">
+          </div>
+
+          <div id="uploaded-files-list" class="files-chip-container"></div>
+        </div>
+
+        <!-- Step C: Parsed Offsets & Mapping Table -->
+        <div id="parsed-table-container" class="parsed-container" style="display: none; margin-top: 1.5rem;">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--text-main); display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fas fa-list" style="color: var(--accent-cyan);"></i> Detected Offsets & File Mapping:</span>
+            <span id="match-status-badge" class="badge-status pending">Pending Files</span>
+          </h4>
+
+          <div class="table-wrapper">
+            <table class="parsed-table">
+              <thead>
+                <tr>
+                  <th>Flash Offset</th>
+                  <th>Command Filename</th>
+                  <th>Uploaded File Match</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="parsed-table-body">
+                <!-- Dynamic rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="custom-flasher-box" style="margin-top: 1.25rem;">
+            <esp-web-install-button id="esp-button-custom" style="display: none;">
+              <button slot="activate" class="btn-activate">
+                <i class="fas fa-bolt"></i> Connect & Flash Custom Binaries
+              </button>
+            </esp-web-install-button>
+
+            <button id="btn-export-manifest" class="btn-sm btn-primary-sm" style="display: none; margin-top: 0.75rem;">
+              <i class="fas fa-file-code"></i> Download Generated manifest.json
+            </button>
+
+            <div id="custom-flasher-msg" style="font-size: 0.88rem; color: var(--accent-amber); text-align: center; margin-top: 0.5rem;">
+              Please paste a flash command and upload the required <code>.bin</code> files to enable flashing.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- MODE 3: DEVELOPER ZIP PACKAGER CARD -->
+      <div id="section-creator-flasher" class="glass-card mode-section">
+        <div class="card-header">
+          <h3 class="card-title">
+            <i class="fas fa-file-archive"></i> Developer Release ZIP Generator
+          </h3>
+          <span id="creator-chip-badge" class="chip-pill">Auto-Detect Mode</span>
+        </div>
+
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+          Paste your compiler flash command below. The portal will automatically detect partition offsets and read the compiled <code>.bin</code> files directly from your computer's build directory to build a complete <strong>`web_flasher_portal.zip`</strong> package.
+        </p>
+
+        <!-- Command Input for Creator -->
+        <div class="input-group">
+          <label for="creator-cmd" class="input-label">
+            <i class="fas fa-terminal"></i> Paste Arduino IDE / ESPTool Command:
+          </label>
+          <textarea id="creator-cmd" class="cmd-textarea" rows="4" placeholder="Paste your esptool flash command string here..."></textarea>
+          <div class="cmd-actions">
+            <button id="btn-creator-example" class="btn-sm">
+              <i class="fas fa-lightbulb"></i> Load Example Command
+            </button>
+            <button id="btn-creator-clear" class="btn-sm">
+              <i class="fas fa-eraser"></i> Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Direct Server Auto-Fetch Option -->
+        <div style="margin-top: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button id="btn-auto-fetch-local" class="btn-activate" style="background: linear-gradient(135deg, var(--accent-emerald), var(--primary)); width: 100%;">
+            <i class="fas fa-magic"></i> Auto-Detect Local .BIN Files & Create ZIP
+          </button>
+        </div>
+
+        <!-- Manual Upload Dropzone Fallback -->
+        <details style="margin-top: 1.25rem; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 0.75rem;">
+          <summary style="cursor: pointer; font-size: 0.88rem; color: var(--text-muted); font-weight: 500;">
+            <i class="fas fa-upload"></i> Or upload .bin files manually (Browser Fallback)
+          </summary>
+          <div class="input-group" style="margin-top: 0.75rem;">
+            <div id="creator-dropzone" class="dropzone">
+              <i class="fas fa-file-archive dropzone-icon" style="color: var(--primary);"></i>
+              <p>Drag & Drop your <code>.bin</code> files here or <span class="browse-link">Browse Files</span></p>
+              <input type="file" id="creator-file-input" multiple accept=".bin" class="file-input">
+            </div>
+            <div id="creator-files-list" class="files-chip-container"></div>
+          </div>
+        </details>
+
+        <!-- Creator Output Status & ZIP Download Button -->
+        <div id="creator-output-box" class="flasher-box" style="margin-top: 1.5rem; background: rgba(15, 23, 42, 0.7);">
+          <div id="creator-status-msg" style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Paste an esptool command and click <strong>Auto-Detect Local .BIN Files & Create ZIP</strong>.
+          </div>
+
+          <button id="btn-generate-zip" class="btn-activate" style="display: none; background: linear-gradient(135deg, var(--accent-cyan), var(--primary));">
+            <i class="fas fa-file-export"></i> Download Browser Generated Release ZIP
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Feature Highlights Card -->
+      <div class="glass-card">
+        <div class="card-header">
+          <h3 class="card-title">
+            <i class="fas fa-shield-alt"></i> Platform Highlights
+          </h3>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: flex; gap: 1rem; align-items: flex-start;">
+            <div style="width: 36px; height: 36px; background: rgba(6, 182, 212, 0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--accent-cyan);">
+              <i class="fas fa-terminal"></i>
+            </div>
+            <div>
+              <h4 style="font-size: 1rem; margin-bottom: 0.2rem;">Auto-Detect Local Binaries</h4>
+              <p style="font-size: 0.88rem; color: var(--text-muted);">
+                Reads binary file paths directly from raw Arduino IDE compiler commands and copies compiled `.bin` files automatically from local disk.
+              </p>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 1rem; align-items: flex-start;">
+            <div style="width: 36px; height: 36px; background: rgba(16, 185, 129, 0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--accent-emerald);">
+              <i class="fas fa-file-archive"></i>
+            </div>
+            <div>
+              <h4 style="font-size: 1rem; margin-bottom: 0.2rem;">Complete Release ZIP Generator</h4>
+              <p style="font-size: 0.88rem; color: var(--text-muted);">
+                Generates a complete standalone web flasher ZIP package containing your binary files and manifest.json ready for GitHub Pages hosting.
+              </p>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 1rem; align-items: flex-start;">
+            <div style="width: 36px; height: 36px; background: rgba(245, 158, 11, 0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--accent-amber);">
+              <i class="fas fa-desktop"></i>
+            </div>
+            <div>
+              <h4 style="font-size: 1rem; margin-bottom: 0.2rem;">Zero Setup Required</h4>
+              <p style="font-size: 0.88rem; color: var(--text-muted);">
+                Runs locally via server or browser. No manual file slicing or esptool command parsing needed.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Serial Monitor Console -->
+      <div class="glass-card terminal-card" id="serial-section">
+        <div class="card-header">
+          <h3 class="card-title">
+            <i class="fas fa-terminal"></i> Live Web Serial Terminal
+          </h3>
+
+          <div class="terminal-controls">
+            <select id="baud-rate" class="baud-select" title="Select Baud Rate">
+              <option value="115200" selected>115200 Baud</option>
+              <option value="9600">9600 Baud</option>
+              <option value="57600">57600 Baud</option>
+              <option value="230400">230400 Baud</option>
+              <option value="460800">460800 Baud</option>
+              <option value="921600">921600 Baud</option>
+            </select>
+
+            <button id="btn-connect-terminal" class="btn-sm">
+              <i class="fas fa-terminal"></i> Start Terminal
+            </button>
+            <button id="btn-autoscroll" class="btn-sm btn-primary-sm">
+              <i class="fas fa-arrow-down"></i> Auto-scroll ON
+            </button>
+            <button id="btn-clear-terminal" class="btn-sm">
+              <i class="fas fa-trash"></i> Clear
+            </button>
+            <button id="btn-save-log" class="btn-sm">
+              <i class="fas fa-download"></i> Save Log
+            </button>
+          </div>
+        </div>
+
+        <div id="terminal-window" class="terminal-window">
+          <div class="terminal-placeholder">
+            Click <strong>Start Terminal</strong> to connect and view live serial logs from your ESP board.
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Flashing & Connection Guide -->
+    <section style="margin-top: 3rem;">
+      <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; text-align: center;">
+        <i class="fas fa-list-check" style="color: var(--accent-cyan);"></i> How It Works & Setup Guide
+      </h3>
+
+      <div class="guide-grid">
+
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Paste Command</h4>
+            <p>Developers paste their Arduino IDE upload command to auto-detect compiled <code>.bin</code> files directly from hard drive.</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Deploy to GitHub Pages</h4>
+            <p>Unzip <code>web_flasher_portal.zip</code> into your GitHub repository and enable GitHub Pages under Settings > Pages.</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>One-Click Browser Flash</h4>
+            <p>Users visit your GitHub Pages site in Chrome/Edge, plug in their ESP board, and flash firmware directly!</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- USB Drivers & Troubleshooting -->
+    <section class="glass-card" style="margin-top: 2.5rem;">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="fas fa-wrench"></i> USB Drivers & Connection Troubleshooting
+        </h3>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+        <div>
+          <h4 style="font-size: 1.05rem; margin-bottom: 0.6rem; color: var(--text-main);">
+            <i class="fas fa-download" style="color: var(--accent-cyan); margin-right: 0.4rem;"></i> Missing USB UART Drivers?
+          </h4>
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
+            If your board's serial port does not show up in the selection dialog, install the driver corresponding to your board's USB-to-UART bridge chip:
+          </p>
+
+          <div class="driver-pills">
+            <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener" class="driver-pill">
+              <i class="fas fa-cube"></i> CP2102 / CP2104 Driver
+            </a>
+            <a href="http://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener" class="driver-pill">
+              <i class="fas fa-cube"></i> CH340 / CH341 Driver
+            </a>
+            <a href="https://ftdichip.com/drivers/vcp-drivers/" target="_blank" rel="noopener" class="driver-pill">
+              <i class="fas fa-cube"></i> FTDI VCP Driver
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <h4 style="font-size: 1.05rem; margin-bottom: 0.6rem; color: var(--text-main);">
+            <i class="fas fa-microchip" style="color: var(--accent-amber); margin-right: 0.4rem;"></i> Board Fails to Enter Bootloader?
+          </h4>
+          <p style="font-size: 0.88rem; color: var(--text-muted);">
+            Some ESP32 boards (like NodeMCU-32S or ESP32-CAM) require manual bootloader entry:
+          </p>
+          <ul style="font-size: 0.88rem; color: var(--text-muted); margin-left: 1.25rem; margin-top: 0.5rem; line-height: 1.7;">
+            <li>Press and <strong>HOLD</strong> the <code>BOOT</code> (or <code>IO0</code>) button on your board.</li>
+            <li>Click <strong>Connect & Flash Device</strong> in the browser.</li>
+            <li>Release the <code>BOOT</code> button as soon as writing begins.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>
+        ESP Web Flasher Portal &bull; Powered by <a href="https://esphome.github.io/esp-web-tools/" target="_blank" rel="noopener">ESP Web Tools</a> & Web Serial API
+      </p>
+      <p style="margin-top: 0.4rem; font-size: 0.8rem;">
+        Deployable directly to <a href="https://pages.github.com/" target="_blank" rel="noopener">GitHub Pages</a>
+      </p>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
