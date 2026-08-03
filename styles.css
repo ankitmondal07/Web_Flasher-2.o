@@ -169,23 +169,27 @@ body::before {
   padding: 2rem 1.5rem 4rem;
   position: relative;
   z-index: 1;
+}
+
+/* Scroll-triggered reveal via JS class */
+.reveal-on-scroll {
   opacity: 0;
-  animation: fade-in-up 0.8s var(--ease-out) forwards;
+  transform: translateY(20px);
+  transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
 }
-.app-container > * {
-  animation-fill-mode: both;
+.reveal-on-scroll.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
-.app-container > *:nth-child(1) { animation-delay: calc(var(--duration-stagger) * 0); }
-.app-container > *:nth-child(2) { animation-delay: calc(var(--duration-stagger) * 1); }
-.app-container > *:nth-child(3) { animation-delay: calc(var(--duration-stagger) * 2); }
-.app-container > *:nth-child(4) { animation-delay: calc(var(--duration-stagger) * 3); }
-.app-container > *:nth-child(5) { animation-delay: calc(var(--duration-stagger) * 4); }
-.app-container > *:nth-child(6) { animation-delay: calc(var(--duration-stagger) * 5); }
-.app-container > *:nth-child(7) { animation-delay: calc(var(--duration-stagger) * 6); }
-.app-container > *:nth-child(8) { animation-delay: calc(var(--duration-stagger) * 7); }
-.app-container > *:nth-child(9) { animation-delay: calc(var(--duration-stagger) * 8); }
-.app-container > *:nth-child(10) { animation-delay: calc(var(--duration-stagger) * 9); }
-.app-container > *:nth-child(n+10) { animation-delay: calc(var(--duration-stagger) * 9); }
+
+/* Tab content transition */
+.mode-section {
+  display: none;
+}
+.mode-section.active {
+  display: block;
+  animation: fade-in 0.4s var(--ease-out) both;
+}
 
 * {
   box-sizing: border-box;
@@ -499,7 +503,6 @@ body::before {
   transition: all 0.3s var(--ease-out);
   position: relative;
   overflow: hidden;
-  animation: fade-in-up 0.6s var(--ease-out) both;
 }
 
 .glass-card::before {
@@ -1056,7 +1059,6 @@ esp-web-install-button::part(button):active {
 /* Serial Monitor Section */
 .terminal-card {
   grid-column: 1 / -1;
-  animation: fade-in-up 0.6s var(--ease-out) 0.6s both;
 }
 
 .terminal-controls {
@@ -1273,7 +1275,6 @@ details[open] > summary::before {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   transition: all 0.4s var(--ease-spring);
-  animation: fade-in-up 0.6s var(--ease-out) both;
   position: relative;
   overflow: hidden;
 }
@@ -1454,19 +1455,10 @@ details[open] > summary::before {
   animation: spin-slow 2s linear infinite;
 }
 
-/* Staggered table row animation */
-@keyframes stagger-fade {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Parsed table rows get staggered entrance when rendered */
-.parsed-table tbody tr[data-animated] {
-  animation: slide-in 0.5s var(--ease-out) both;
+/* Parsed table rows get staggered entrance when rendered via JS */
+.parsed-table tbody tr {
   opacity: 1;
 }
-
-/* Responsive tweaks */
 @media (max-width: 768px) {
   .hero-title { font-size: 2.2rem; }
   .header { flex-direction: column; gap: 1rem; }

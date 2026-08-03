@@ -314,39 +314,26 @@ async function handleEndUserZip(zipFile) {
  * IntersectionObserver-driven reveals, and interactive feedback.
  */
 function initAnimations() {
-  const appContainer = document.querySelector('.app-container');
-  if (appContainer) {
-    appContainer.style.opacity = '1';
-  }
-
   // ── IntersectionObserver: reveal glass-cards & step-cards as they scroll into view
   const revealElements = document.querySelectorAll(
-    '.glass-card, .step-card, .guide-grid > *, .terminal-card, footer.footer'
+    '.glass-card:not(.mode-section), .step-card, .terminal-card'
   );
-  const observerOptions = {
-    root: null,
-    threshold: 0.08,
-    rootMargin: '0px 0px -40px 0px'
-  };
 
   const revealObserver = new IntersectionObserver((entries, obs) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
-        entry.target.style.opacity = '1';
-        entry.target.style.transform = 'translateY(0)';
-        entry.target.style.transition = 'opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out)';
-        if (entry.target.classList.contains('step-card')) {
-          entry.target.style.animation = 'fade-in-up 0.6s var(--ease-out) both';
-        }
+        entry.target.classList.add('visible');
         obs.unobserve(entry.target);
       }
     });
-  }, observerOptions);
+  }, {
+    root: null,
+    threshold: 0.08,
+    rootMargin: '0px 0px -40px 0px'
+  });
 
   revealElements.forEach(el => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(20px)';
-    el.style.transition = 'none';
+    el.classList.add('reveal-on-scroll');
     revealObserver.observe(el);
   });
 
@@ -453,9 +440,25 @@ function animateTableRows(tbody) {
   if (!tbody) return;
   const rows = tbody.querySelectorAll('tr');
   rows.forEach((row, i) => {
-    row.style.animation = `fade-in-up 0.4s var(--ease-out) both`;
-    row.style.animationDelay = `${0.05 * i}s`;
+    row.style.transition = 'none';
+    row.style.opacity = '0';
+    row.style.transform = 'translateY(15px)';
+    row.setAttribute('data-stagger', i);
   });
+  setTimeout(() => {
+    rows.forEach((row, i) => {
+      row.style.transition = 'all 0.4s var(--ease-out)';
+      row.style.transitionDelay = `${0.05 * i}s`;
+      row.style.opacity = '1';
+      row.style.transform = 'translateY(0)';
+    });
+    setTimeout(() => {
+      rows.forEach(row => {
+        row.style.transition = '';
+        row.style.transitionDelay = '';
+      });
+    }, 500);
+  }, 10);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -522,22 +525,10 @@ function initModeTabs() {
     const sections = [sectionDefault, sectionCustom, sectionCreator];
 
     tabs.forEach(t => t.classList.remove('active'));
-    sections.forEach(s => {
-      s.classList.remove('active');
-      s.style.opacity = '0';
-      s.style.transform = 'translateY(15px)';
-    });
+    sections.forEach(s => s.classList.remove('active'));
 
     activeTab.classList.add('active');
-
     activeSection.classList.add('active');
-    activeSection.style.opacity = '1';
-    activeSection.style.transform = 'translateY(0)';
-
-    setTimeout(() => {
-      activeSection.style.opacity = '';
-      activeSection.style.transform = '';
-    }, 500);
 
     animatePop(activeTab);
   }
@@ -835,8 +826,9 @@ function renderParsedTable() {
     `;
 
       tbody.appendChild(tr);
-      tr.setAttribute('data-animated', '');
    });
+
+   animateTableRows(tbody);
 
    if (allMatched && parsedEntries.length > 0) {
     badgeStatus.className = 'badge-status success';
