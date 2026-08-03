@@ -28,6 +28,12 @@ function initEndUserZipLoader() {
   
   if (!dropzone || !fileInput) return;
 
+  dropzone.addEventListener('mouseenter', () => {
+    dropzone.style.transform = 'scale(1.02)';
+  });
+  dropzone.addEventListener('mouseleave', () => {
+    dropzone.style.transform = '';
+  });
 
 
   ['dragenter', 'dragover'].forEach(eventName => {
@@ -49,6 +55,8 @@ function initEndUserZipLoader() {
   dropzone.addEventListener('drop', (e) => {
     const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.zip'));
     if (files.length > 0) {
+      dropzone.style.animation = 'bounce 0.5s ease-in-out';
+      setTimeout(() => { dropzone.style.animation = ''; }, 500);
       handleEndUserZip(files[0]);
     }
   });
@@ -56,6 +64,8 @@ function initEndUserZipLoader() {
   fileInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.zip'));
     if (files.length > 0) {
+      dropzone.style.animation = 'bounce 0.5s ease-in-out';
+      setTimeout(() => { dropzone.style.animation = ''; }, 500);
       handleEndUserZip(files[0]);
     }
   });
@@ -275,20 +285,178 @@ async function handleEndUserZip(zipFile) {
       `;
       tbody.appendChild(tr);
     });
+    animateTableRows(tbody);
 
     statusMsg.innerHTML = '<span style="color: var(--accent-emerald); font-weight: 600;"><i class="fas fa-check-circle"></i> Firmware loaded! Click <strong>Connect &amp; Flash Device</strong> to flash your board.</span>';
     metaContainer.style.display = 'block';
     flasherBox.style.display = 'block';
 
+    badge.textContent = chipFamily || 'Ready';
+    badge.className = 'chip-pill emerald';
+    badge.style.animation = 'pulse-glow 2s ease-in-out infinite';
+
+    flasherBox.style.animation = 'fade-in 0.5s var(--ease-out) both';
+
   } catch (err) {
     console.error('[EndUserFlasher] Error:', err);
     badge.textContent = 'Error';
+    badge.className = 'chip-pill rose';
+    badge.style.animation = 'pulse-glow 1.5s ease-in-out infinite';
     statusMsg.innerHTML = `<span style="color: var(--accent-rose); font-weight: 600;"><i class="fas fa-exclamation-triangle"></i> Failed: ${escapeHtml(err.message)}</span>`;
     metaContainer.style.display = 'none';
     flasherBox.style.display = 'none';
   }
 }
 
+
+/**
+ * UI Animation System - Entrance effects, micro-interactions,
+ * IntersectionObserver-driven reveals, and interactive feedback.
+ */
+function initAnimations() {
+  const appContainer = document.querySelector('.app-container');
+  if (appContainer) {
+    appContainer.style.opacity = '1';
+  }
+
+  // ── IntersectionObserver: reveal glass-cards & step-cards as they scroll into view
+  const revealElements = document.querySelectorAll(
+    '.glass-card, .step-card, .guide-grid > *, .terminal-card, footer.footer'
+  );
+  const observerOptions = {
+    root: null,
+    threshold: 0.08,
+    rootMargin: '0px 0px -40px 0px'
+  };
+
+  const revealObserver = new IntersectionObserver((entries, obs) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+        entry.target.style.transition = 'opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out)';
+        if (entry.target.classList.contains('step-card')) {
+          entry.target.style.animation = 'fade-in-up 0.6s var(--ease-out) both';
+        }
+        obs.unobserve(entry.target);
+      }
+    });
+  }, observerOptions);
+
+  revealElements.forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'none';
+    revealObserver.observe(el);
+  });
+
+  // ── Ripple effect for buttons
+  function createRipple(event) {
+    const btn = event.currentTarget;
+    const circle = document.createElement('span');
+    const diameter = 100;
+    const radius = diameter / 2;
+    circle.style.width = circle.style.height = diameter + 'px';
+    circle.style.left = (event.clientX - btn.getBoundingClientRect().left - radius) + 'px';
+    circle.style.top = (event.clientY - btn.getBoundingClientRect().top - radius) + 'px';
+    circle.classList.add('ripple');
+    btn.appendChild(circle);
+    setTimeout(() => circle.remove(), 700);
+  }
+
+  document.querySelectorAll('.tab-btn, .btn-sm, .driver-pill, .browse-link, .step-card').forEach(el => {
+    el.addEventListener('click', createRipple);
+  });
+
+  // ── Animate the hero tag icon gently
+  const heroTagIcon = document.querySelector('.hero-tag i');
+  if (heroTagIcon) {
+    heroTagIcon.style.animation = 'bounce 2s ease-in-out infinite';
+  }
+
+  // ── Floating animation for ambient decorative circles in hero
+  const hero = document.querySelector('.hero');
+  if (hero) {
+    hero.style.overflow = 'hidden';
+    hero.addEventListener('mousemove', (e) => {
+      const rect = hero.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      const tag = hero.querySelector('.hero-tag');
+      if (tag) {
+        tag.style.transform = `translate(${x * 4}px, ${y * 4}px)`;
+      }
+    });
+    hero.addEventListener('mouseleave', () => {
+      const tag = hero.querySelector('.hero-tag');
+      if (tag) {
+        tag.style.transform = '';
+      }
+    });
+  }
+
+  // ── Animate stat numbers / chips on first appearance
+  const chips = document.querySelectorAll('.file-chip');
+  if (chips.length > 0) {
+    const chipObserver = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.animation = 'fade-in-right 0.5s var(--ease-out) both';
+          obs.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.8 });
+    chips.forEach(c => chipObserver.observe(c));
+  }
+
+  // ── Auto-scroll indicator pulsing animation on hero
+  const heroScrollHint = document.createElement('div');
+  heroScrollHint.innerHTML = '<i class="fas fa-chevron-down"></i>';
+  heroScrollHint.style.cssText = `
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    animation: bounce 2s ease-in-out infinite;
+    pointer-events: none;
+    opacity: 0.6;
+  `;
+  if (hero) hero.appendChild(heroScrollHint);
+}
+
+/**
+ * Add a CSS class to animate a status element with a spinner
+ */
+function animateStatusWithSpinner(el) {
+  if (!el) return;
+  el.classList.add('spin');
+}
+
+/**
+ * Trigger a quick "pop" animation on an element
+ */
+function animatePop(el) {
+  if (!el) return;
+  el.style.transition = 'all 0.3s var(--ease-spring)';
+  el.style.transform = 'scale(1.1)';
+  setTimeout(() => {
+    el.style.transform = 'scale(1)';
+  }, 150);
+}
+
+/**
+ * Add staggered animation to table rows
+ */
+function animateTableRows(tbody) {
+  if (!tbody) return;
+  const rows = tbody.querySelectorAll('tr');
+  rows.forEach((row, i) => {
+    row.style.animation = `fade-in-up 0.4s var(--ease-out) both`;
+    row.style.animationDelay = `${0.05 * i}s`;
+  });
+}
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -300,6 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initCreatorMode();
   initSerialTerminal();
   initUI();
+  initAnimations();
 });
 
 /**
@@ -349,10 +518,28 @@ function initModeTabs() {
   if (!tabDefault || !tabCustom || !tabCreator) return;
 
   function switchTab(activeTab, activeSection) {
-    [tabDefault, tabCustom, tabCreator].forEach(t => t.classList.remove('active'));
-    [sectionDefault, sectionCustom, sectionCreator].forEach(s => s.classList.remove('active'));
+    const tabs = [tabDefault, tabCustom, tabCreator];
+    const sections = [sectionDefault, sectionCustom, sectionCreator];
+
+    tabs.forEach(t => t.classList.remove('active'));
+    sections.forEach(s => {
+      s.classList.remove('active');
+      s.style.opacity = '0';
+      s.style.transform = 'translateY(15px)';
+    });
+
     activeTab.classList.add('active');
+
     activeSection.classList.add('active');
+    activeSection.style.opacity = '1';
+    activeSection.style.transform = 'translateY(0)';
+
+    setTimeout(() => {
+      activeSection.style.opacity = '';
+      activeSection.style.transform = '';
+    }, 500);
+
+    animatePop(activeTab);
   }
 
   tabDefault.addEventListener('click', () => switchTab(tabDefault, sectionDefault));
@@ -373,6 +560,8 @@ function initCommandParser() {
   if (!btnParse || !cmdTextarea) return;
 
   btnParse.addEventListener('click', () => {
+    btnParse.style.animation = 'pulse-glow 0.8s ease-in-out';
+    setTimeout(() => { btnParse.style.animation = ''; }, 800);
     parseEsptoolCommand(cmdTextarea.value);
   });
 
@@ -383,32 +572,40 @@ function initCommandParser() {
   btnExample.addEventListener('click', () => {
     const exampleCmd = `C:\\Users\\Ankit Mondal\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esptool_py\\3.3.0/esptool.exe --chip esp32 --port COM14 --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 80m --flash_size 4MB 0x1000 C:\\Users\\ANKITM~1\\AppData\\Local\\Temp\\arduino_build_411707/web_flash.ino.bootloader.bin 0x8000 C:\\Users\\ANKITM~1\\AppData\\Local\\Temp\\arduino_build_411707/web_flash.ino.partitions.bin 0xe000 C:\\Users\\Ankit Mondal\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\2.0.3/tools/partitions/boot_app0.bin 0x10000 C:\\Users\\ANKITM~1\\AppData\\Local\\Temp\\arduino_build_411707/web_flash.ino.bin`;
     cmdTextarea.value = exampleCmd;
+    animatePop(btnExample);
     parseEsptoolCommand(exampleCmd);
   });
 
   btnClear.addEventListener('click', () => {
     cmdTextarea.value = '';
     parsedEntries = [];
+    animatePop(btnClear);
     renderParsedTable();
   });
 
   btnExport.addEventListener('click', () => {
     if (!currentManifestObject) return;
+    animatePop(btnExport);
+    btnExport.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+
     const exportManifest = JSON.parse(JSON.stringify(currentManifestObject));
     exportManifest.builds[0].parts.forEach((part, i) => {
       const entry = parsedEntries[i];
       part.path = `firmware/${entry.matchedFile ? entry.matchedFile.name : entry.commandFilename}`;
     });
 
-    const blob = new Blob([JSON.stringify(exportManifest, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'manifest.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      const blob = new Blob([JSON.stringify(exportManifest, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'manifest.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      btnExport.innerHTML = '<i class="fas fa-file-code"></i> Download Generated manifest.json';
+    }, 600);
   });
 }
 
@@ -436,7 +633,20 @@ function parseEsptoolCommand(rawCmd) {
     detectedChip = 'ESP32';
   }
 
-  document.getElementById('detected-chip-badge').textContent = `Chip: ${detectedChip}`;
+   const badge = document.getElementById('detected-chip-badge');
+  if (badge) {
+    badge.textContent = `Chip: ${detectedChip}`;
+    const chipLower = detectedChip.toLowerCase().replace(/[^a-z0-9]/g, '');
+    badge.className = 'chip-pill';
+    if (chipLower.includes('esp32s2')) badge.classList.add('purple');
+    else if (chipLower.includes('s3')) badge.classList.add('purple');
+    else if (chipLower.includes('c3')) badge.classList.add('amber');
+    else if (chipLower.includes('c6')) badge.classList.add('rose');
+    else if (detectedChip === 'ESP8266') badge.classList.add('rose');
+    else badge.classList.add('purple');
+    badge.style.animation = 'bounce 1s ease-in-out';
+    setTimeout(() => { badge.style.animation = ''; }, 1000);
+  }
 
   // 2. Locate write_flash section
   const writeFlashIndex = rawCmd.indexOf('write_flash');
@@ -534,12 +744,19 @@ function renderUploadedFileChips() {
   uploadedFiles.forEach((file, idx) => {
     const chip = document.createElement('div');
     chip.className = 'file-chip';
+    chip.style.opacity = '0';
+    chip.style.transform = 'translateY(10px)';
     chip.innerHTML = `
       <i class="fas fa-file-binary"></i>
       <span>${escapeHtml(file.name)} (${(file.size / 1024).toFixed(1)} KB)</span>
       <i class="fas fa-times remove-file" onclick="removeUploadedFile(${idx})"></i>
     `;
     container.appendChild(chip);
+    setTimeout(() => {
+      chip.style.transition = 'all 0.3s var(--ease-spring)';
+      chip.style.opacity = '1';
+      chip.style.transform = 'translateY(0)';
+    }, idx * 80);
   });
 }
 
@@ -617,21 +834,25 @@ function renderParsedTable() {
       </td>
     `;
 
-    tbody.appendChild(tr);
-  });
+      tbody.appendChild(tr);
+      tr.setAttribute('data-animated', '');
+   });
 
-  if (allMatched && parsedEntries.length > 0) {
+   if (allMatched && parsedEntries.length > 0) {
     badgeStatus.className = 'badge-status success';
     badgeStatus.textContent = 'All Files Ready ✅';
+    badgeStatus.style.animation = 'pulse-glow 2s ease-in-out infinite';
     customFlasherMsg.style.display = 'none';
 
     generateDynamicManifest();
 
     espButtonCustom.style.display = 'block';
     btnExport.style.display = 'inline-flex';
+    animatePop(espButtonCustom);
   } else {
     badgeStatus.className = 'badge-status pending';
     badgeStatus.textContent = `Pending (${parsedEntries.filter(e => !e.matchedFile).length} Missing)`;
+    badgeStatus.style.animation = 'pulse-glow 3s ease-in-out infinite';
     customFlasherMsg.style.display = 'block';
     customFlasherMsg.innerHTML = `Upload or select the remaining <code>.bin</code> files to enable flashing.`;
     espButtonCustom.style.display = 'none';
@@ -743,7 +964,7 @@ function initCreatorMode() {
 
         if (resData.success) {
           statusMsg.innerHTML = `<span style="color: var(--accent-emerald); font-weight: 600;"><i class="fas fa-check-circle"></i> Success! Local .bin files detected on disk and packaged into <code>${resData.zip_url}</code>!</span>`;
-          
+
           // Trigger immediate download of generated ZIP
           const a = document.createElement('a');
           a.href = resData.zip_url + '?t=' + Date.now();
@@ -751,12 +972,18 @@ function initCreatorMode() {
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
+
+          btnAutoFetch.innerHTML = '<i class="fas fa-check-circle"></i> ZIP Generated! Download Starting...';
+          btnAutoFetch.style.background = 'linear-gradient(135deg, var(--accent-emerald), var(--primary))';
+          btnAutoFetch.style.animation = 'pulse-glow 1.5s ease-in-out infinite';
         } else {
           throw new Error(resData.message || 'Error processing request.');
         }
       } catch (err) {
         console.warn(err);
         statusMsg.innerHTML = `<span style="color: var(--accent-amber);"><i class="fas fa-exclamation-triangle"></i> ${err.message}</span>`;
+        btnAutoFetch.style.animation = 'wiggle 0.5s ease-in-out';
+        setTimeout(() => { btnAutoFetch.style.animation = ''; }, 500);
       } finally {
         btnAutoFetch.disabled = false;
         btnAutoFetch.innerHTML = '<i class="fas fa-magic"></i> Auto-Detect Local .BIN Files & Create ZIP';
@@ -819,12 +1046,19 @@ function renderCreatorFileChips() {
   creatorFiles.forEach((file, idx) => {
     const chip = document.createElement('div');
     chip.className = 'file-chip';
+    chip.style.opacity = '0';
+    chip.style.transform = 'translateY(10px)';
     chip.innerHTML = `
       <i class="fas fa-file-archive"></i>
       <span>${escapeHtml(file.name)} (${(file.size / 1024).toFixed(1)} KB)</span>
       <i class="fas fa-times remove-file" onclick="removeCreatorFile(${idx})"></i>
     `;
     container.appendChild(chip);
+    setTimeout(() => {
+      chip.style.transition = 'all 0.3s var(--ease-spring)';
+      chip.style.opacity = '1';
+      chip.style.transform = 'translateY(0)';
+    }, idx * 80);
   });
 }
 
@@ -850,7 +1084,15 @@ function updateCreatorState() {
     else if (rawChip.includes('esp32c3')) creatorChip = 'ESP32-C3';
     else if (rawChip.includes('esp32c6')) creatorChip = 'ESP8266';
   }
-  badge.textContent = `Chip: ${creatorChip}`;
+   badge.textContent = `Chip: ${creatorChip}`;
+   const chipLower = creatorChip.toLowerCase().replace(/[^a-z0-9]/g, '');
+   badge.className = 'chip-pill';
+   if (chipLower.includes('esp32s2') || chipLower.includes('s3')) badge.classList.add('purple');
+   else if (chipLower.includes('c3')) badge.classList.add('amber');
+   else if (chipLower.includes('c6')) badge.classList.add('rose');
+   else if (creatorChip === 'ESP8266') badge.classList.add('rose');
+   else badge.classList.add('purple');
+   badge.style.animation = 'pulse-glow 3s ease-in-out infinite';
 
   const writeFlashIndex = rawCmd.indexOf('write_flash');
   if (writeFlashIndex === -1) {
@@ -880,15 +1122,24 @@ function updateCreatorState() {
 
   const missingCount = creatorEntries.filter(e => !e.matchedFile).length;
 
-  if (creatorEntries.length === 0) {
+   if (creatorEntries.length === 0) {
     statusMsg.innerHTML = '<span style="color: var(--accent-rose);">No offset addresses (0x...) or .bin filenames detected.</span>';
     btnGenerateZip.style.display = 'none';
+    badge.textContent = 'No Partitions';
+    badge.className = 'chip-pill rose';
   } else if (missingCount > 0) {
     statusMsg.innerHTML = `Detected ${creatorEntries.length} partitions (${creatorChip}). Click <strong>Auto-Detect Local .BIN Files & Create ZIP</strong> to fetch files from your hard drive automatically!`;
     btnGenerateZip.style.display = 'none';
+    badge.textContent = `Chip: ${creatorChip} (${creatorEntries.length})`;
+    badge.classList.remove('emerald');
+    badge.classList.add('amber');
   } else {
     statusMsg.innerHTML = `<span style="color: var(--accent-emerald); font-weight: 600;"><i class="fas fa-check-circle"></i> Ready! All ${creatorEntries.length} partitions matched for ${creatorChip}.</span>`;
     btnGenerateZip.style.display = 'inline-flex';
+    badge.textContent = `${creatorChip} - Ready!`;
+    badge.classList.remove('amber', 'rose');
+    badge.classList.add('emerald');
+    setTimeout(() => animatePop(btnGenerateZip), 100);
   }
 }
 
@@ -904,6 +1155,7 @@ async function generateReleaseZip() {
   const btnGenerateZip = document.getElementById('btn-generate-zip');
   btnGenerateZip.disabled = true;
   btnGenerateZip.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Building web_flasher_portal.zip...';
+  btnGenerateZip.style.animation = 'pulse-glow 1s ease-in-out infinite';
 
   try {
     const zip = new JSZip();
@@ -985,9 +1237,12 @@ async function generateReleaseZip() {
   } catch (err) {
     console.error('ZIP generation error:', err);
     alert('Failed to generate ZIP package: ' + err.message);
+    btnGenerateZip.style.animation = 'wiggle 0.5s ease-in-out';
+    setTimeout(() => { btnGenerateZip.style.animation = ''; }, 500);
   } finally {
     btnGenerateZip.disabled = false;
     btnGenerateZip.innerHTML = '<i class="fas fa-file-export"></i> Download Browser Generated Release ZIP';
+    btnGenerateZip.style.animation = 'pulse-glow 2s ease-in-out infinite';
   }
 }
 
